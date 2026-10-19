@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""OmniVoice 보이스 클로닝 CLI (로컬 NVIDIA GPU용).
+"""OmniVoice 보이스 클로닝 CLI (NVIDIA CUDA / Intel XPU / Apple MPS / CPU).
 
     python omnivoice_cli.py say "안녕하세요" -r voice_01.wav -o hello.wav
     python omnivoice_cli.py batch script.txt -r voice_01.wav -o outputs/lesson1
@@ -27,16 +27,40 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+DEVICE = "auto"  # main() 에서 --device 로 채운다
+
+
+def resolve_device(want: str) -> str:
+    """auto 면 cuda → xpu → mps → cpu 순으로 쓸 수 있는 것을 고른다."""
+    import torch
+
+    has = {
+        "cuda": torch.cuda.is_available(),
+        "xpu": hasattr(torch, "xpu") and torch.xpu.is_available(),
+        "mps": hasattr(torch.backends, "mps") and torch.backends.mps.is_available(),
+        "cpu": True,
+    }
+    if want == "auto":
+        return next(d for d in ("cuda", "xpu", "mps", "cpu") if has[d])
+    if not has[want]:
+        sys.exit(f"{want} 장치를 쓸 수 없습니다. 그 장치용 setup 스크립트로 torch 를 설치했는지 확인하세요.")
+    return want
+
+
 def load_model(need_asr: bool):
     import torch
     from omnivoice import OmniVoice
 
-    if not torch.cuda.is_available():
-        sys.exit("CUDA GPU를 찾지 못했습니다. NVIDIA 드라이버와 CUDA torch 설치를 확인하세요.")
-    log(f"모델 로드 중… ({torch.cuda.get_device_name(0)})")
+    dev = resolve_device(DEVICE)
+    name = {"cuda": lambda: torch.cuda.get_device_name(0),
+            "xpu": lambda: torch.xpu.get_device_name(0)}.get(dev, lambda: dev.upper())()
+    # CPU·MPS 는 float16 연산이 느리거나 불안정해서 float32 로 돌린다
+    dtype = torch.float16 if dev in ("cuda", "xpu") else torch.float32
+    device_map = f"{dev}:0" if dev in ("cuda", "xpu") else dev
+    log(f"모델 로드 중… ({name})" + ("  ※ CPU 는 매우 느립니다" if dev == "cpu" else ""))
     t0 = time.time()
-    model = OmniVoice.from_pretrained(MODEL_ID, device_map="cuda:0",
-                                      dtype=torch.float16, load_asr=need_asr)
+    model = OmniVoice.from_pretrained(MODEL_ID, device_map=device_map, dtype=dtype,
+                                      load_asr=need_asr, asr_device=device_map)
     log(f"모델 로드 완료 ({time.time() - t0:.1f}초)")
     return model
 
@@ -149,6 +173,9 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def common(p, gen=True):
+        p.add_argument("-d", "--device", default="auto",
+                       choices=["auto", "cuda", "xpu", "mps", "cpu"],
+                       help="실행 장치 (기본 auto: cuda → xpu → mps → cpu)")
         p.add_argument("-r", "--ref", required=True, help="레퍼런스 음성 wav (3~10초) 또는 .pt")
         p.add_argument("--ref-text", help="레퍼런스에서 실제로 말한 문장 (생략 시 Whisper 자동)")
         p.add_argument("--no-cache", action="store_true", help="목소리 캐시를 쓰지 않고 다시 등록")
@@ -178,6 +205,8 @@ def main() -> None:
     p.set_defaults(func=cmd_prompt)
 
     args = ap.parse_args()
+    global DEVICE
+    DEVICE = args.device
     args.func(args)
 
 
