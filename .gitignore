@@ -4,3 +4,4 @@ outputs/
 _context/
 *.wav
 *.pt
+.claude/
