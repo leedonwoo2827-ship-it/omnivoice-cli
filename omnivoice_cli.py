@@ -12,6 +12,7 @@ wav 를 주면 받아쓰기(Whisper)·인코딩 결과를 ~/.cache/omnivoice-cli
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import os
 import sys
@@ -71,31 +72,97 @@ def _cache_path(ref: Path, ref_text: str | None) -> Path:
     return CACHE / f"{ref.stem}_{h.hexdigest()[:12]}.pt"
 
 
-def get_prompt(ref: str, ref_text: str | None, no_cache: bool = False):
-    """(model, voice_prompt) — .pt 또는 캐시가 있으면 Whisper 를 띄우지 않는다."""
+def need_asr_for(ref_p: Path, ref_text: str | None, no_cache: bool = False) -> bool:
+    """Whisper 가 필요한가 — 대사도 없고 .pt·캐시도 없을 때만."""
+    if ref_text or ref_p.suffix.lower() == ".pt":
+        return False
+    return no_cache or not _cache_path(ref_p, ref_text).is_file()
+
+
+def make_prompt(model, ref_p: Path, ref_text: str | None, no_cache: bool = False):
+    """레퍼런스 → 클론 프롬프트. .pt 는 그대로 읽고, wav 는 해시 캐시를 쓴다."""
     from omnivoice import VoiceClonePrompt
 
-    ref_p = Path(ref)
-    if not ref_p.is_file():
-        sys.exit(f"레퍼런스 파일이 없습니다: {ref}")
     if ref_p.suffix.lower() == ".pt":
-        return load_model(need_asr=False), VoiceClonePrompt.load(str(ref_p))
-
+        return VoiceClonePrompt.load(str(ref_p))
     cached = _cache_path(ref_p, ref_text)
     if cached.is_file() and not no_cache:
         log(f"캐시된 목소리 사용: {cached}")
-        return load_model(need_asr=False), VoiceClonePrompt.load(str(cached))
-
-    model = load_model(need_asr=not ref_text)
+        return VoiceClonePrompt.load(str(cached))
     log("목소리 등록 중…" + ("" if ref_text else " (Whisper 자동 받아쓰기)"))
     prompt = model.create_voice_clone_prompt(ref_audio=str(ref_p), ref_text=ref_text or None)
     CACHE.mkdir(parents=True, exist_ok=True)
     prompt.save(str(cached))
-    return model, prompt
+    return prompt
+
+
+def get_prompt(ref: str, ref_text: str | None, no_cache: bool = False):
+    """(model, voice_prompt) — .pt 또는 캐시가 있으면 Whisper 를 띄우지 않는다."""
+    ref_p = Path(ref)
+    if not ref_p.is_file():
+        sys.exit(f"레퍼런스 파일이 없습니다: {ref}")
+    model = load_model(need_asr=need_asr_for(ref_p, ref_text, no_cache))
+    return model, make_prompt(model, ref_p, ref_text, no_cache)
 
 
 def synth(model, prompt, text: str, speed: float, steps: int):
     return model.generate(text=text, voice_clone_prompt=prompt, speed=speed, num_step=steps)[0]
+
+
+class RemoteVoice:
+    """코랩 등에서 도는 omnivoice_server.py 에 합성을 맡긴다 (이 PC 에는 torch 불필요)."""
+
+    def __init__(self, server: str, token: str | None, ref: str, ref_text: str | None):
+        ref_p = Path(ref)
+        if not ref_p.is_file():
+            sys.exit(f"레퍼런스 파일이 없습니다: {ref}")
+        self.url = server.rstrip("/")
+        self.token = token or os.environ.get("OMNIVOICE_TOKEN") or ""
+        self.ref_name = ref_p.name
+        self.ref_b64 = base64.b64encode(ref_p.read_bytes()).decode()
+        self.ref_text = ref_text or ""
+        info = self._call("/health", None)
+        log(f"원격 서버 연결됨: {self.url} ({info.get('device')})")
+
+    def _call(self, path: str, payload: dict | None):
+        import json
+        import urllib.error
+        import urllib.request
+
+        data = None if payload is None else json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(self.url + path, data=data, method="GET" if data is None else "POST",
+                                     headers={"Authorization": f"Bearer {self.token}",
+                                              "Content-Type": "application/json",
+                                              "User-Agent": "omnivoice-cli"})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                body = r.read()
+                return json.loads(body) if r.headers.get_content_type() == "application/json" else body
+        except urllib.error.HTTPError as e:
+            msg = e.read().decode("utf-8", "replace")[:300]
+            sys.exit(f"서버 오류 {e.code}: {msg}" + ("  (--token 확인)" if e.code == 401 else ""))
+        except urllib.error.URLError as e:
+            sys.exit(f"서버에 연결하지 못했습니다: {self.url} ({e.reason}) — 코랩 서버 셀이 돌고 있는지, 주소가 맞는지 확인하세요.")
+
+    def synth(self, text: str, speed: float, steps: int):
+        import io
+
+        import soundfile as sf
+
+        wav_bytes = self._call("/tts", {"text": text, "speed": speed, "steps": steps,
+                                        "ref_name": self.ref_name, "ref_b64": self.ref_b64,
+                                        "ref_text": self.ref_text})
+        wav, _ = sf.read(io.BytesIO(wav_bytes), dtype="float32")
+        return wav
+
+
+def get_synth(args):
+    """text -> wav(float32, 24kHz). --server 가 있으면 원격, 없으면 이 PC 에서."""
+    if args.server:
+        rv = RemoteVoice(args.server, args.token, args.ref, args.ref_text)
+        return lambda text: rv.synth(text, args.speed, args.steps)
+    model, prompt = get_prompt(args.ref, args.ref_text, args.no_cache)
+    return lambda text: synth(model, prompt, text, args.speed, args.steps)
 
 
 def write_wav(path: Path, wav) -> float:
@@ -126,10 +193,10 @@ def cmd_say(args) -> None:
     text = read_text(args)
     if not text:
         sys.exit("읽을 텍스트가 없습니다.")
-    model, prompt = get_prompt(args.ref, args.ref_text, args.no_cache)
+    say = get_synth(args)
     out = Path(args.output or time.strftime("out_%Y%m%d_%H%M%S.wav"))
     t0 = time.time()
-    sec = write_wav(out, synth(model, prompt, text, args.speed, args.steps))
+    sec = write_wav(out, say(text))
     log(f"완료: {out} ({sec:.1f}초 음성, 생성 {time.time() - t0:.1f}초)")
     print(out.resolve())
     if args.play:
@@ -142,12 +209,12 @@ def cmd_batch(args) -> None:
     lines = [l.strip() for l in Path(args.script).read_text(encoding="utf-8").splitlines() if l.strip()]
     if not lines:
         sys.exit("대본이 비어 있습니다.")
-    model, prompt = get_prompt(args.ref, args.ref_text, args.no_cache)
+    say = get_synth(args)
     out_dir = Path(args.output or Path("outputs") / time.strftime("batch_%Y%m%d_%H%M%S"))
     gap = np.zeros(int(SR * args.gap), dtype=np.float32)
     pieces = []
     for i, line in enumerate(lines, 1):
-        wav = synth(model, prompt, line, args.speed, args.steps).astype(np.float32)
+        wav = say(line).astype(np.float32)
         sec = write_wav(out_dir / f"{args.prefix}_{i:03d}.wav", wav)
         pieces += [wav, gap]
         log(f"[{i}/{len(lines)}] {sec:.1f}s {line[:40]}")
@@ -180,6 +247,8 @@ def main() -> None:
         p.add_argument("--ref-text", help="레퍼런스에서 실제로 말한 문장 (생략 시 Whisper 자동)")
         p.add_argument("--no-cache", action="store_true", help="목소리 캐시를 쓰지 않고 다시 등록")
         if gen:
+            p.add_argument("-s", "--server", help="원격 합성 서버 주소 (코랩 서버 셀이 출력한 https://….trycloudflare.com)")
+            p.add_argument("-t", "--token", help="원격 서버 비밀번호 (또는 환경변수 OMNIVOICE_TOKEN)")
             p.add_argument("--speed", type=float, default=1.0, help="말 빠르기 (기본 1.0)")
             p.add_argument("--steps", type=int, default=32, help="생성 스텝 16(빠름)/32(품질, 기본)")
 
