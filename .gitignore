@@ -5,3 +5,9 @@ _context/
 *.wav
 *.pt
 .claude/
+workspace/
+config/dict_base/
+config/dict_links.yaml
+*.tmp
+.pytest_cache/
+config/share_token.txt

@@ -37,4 +37,12 @@ echo [setup] OmniVoice 설치
 .venv\Scripts\python -m pip install -r requirements.txt || exit /b 1
 
 .venv\Scripts\python -c "import omnivoice_cli as c, omnivoice; print('[setup] OK  장치:', c.resolve_device('%DEV%'))" || exit /b 1
-echo [setup] 완료. 예: omnivoice say "안녕하세요" -r voice_01.wav -o hello.wav
+
+echo [setup] omnivoice-tts 앱 설치 ^(웹 화면 + HTTP API + 발음 본사전^)
+.venv\Scripts\python -m pip install -e ".[dev]" || exit /b 1
+.venv\Scripts\python -m omnivoice_tts doctor --skip-synth
+echo.
+echo [setup] 완료.
+echo   웹 화면  : run.bat  ^(http://localhost:7879^)
+echo   점검     : doctor.bat  ^(첫 실행 때 모델 약 3GB 를 받습니다^)
+echo   예전 CLI : omnivoice say "안녕하세요" -r voice_01.wav -o hello.wav

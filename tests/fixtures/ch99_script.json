@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "chapter": 99,
+  "title": "voicewright 검증용 가짜 스크립트",
+  "genre": "테스트",
+  "total_duration_seconds": 6.0,
+  "scenes": [
+    {
+      "scene": 1,
+      "image_filename": "ch99_01_intro.png",
+      "prompt": "(테스트용)",
+      "model": "test",
+      "narration_text": "첫 번째 장면입니다. 차분한 여성 목소리로 시작합니다.",
+      "narration_seconds": 3.0,
+      "voice_style": "calm_female",
+      "scene_meta": {}
+    },
+    {
+      "scene": 2,
+      "image_filename": "ch99_02_action.png",
+      "prompt": "(테스트용)",
+      "model": "test",
+      "narration_text": "두 번째 장면입니다. 활기찬 남성 목소리로 전환합니다.",
+      "narration_seconds": 3.0,
+      "voice_style": "energetic_male",
+      "scene_meta": {}
+    },
+    {
+      "scene": 3,
+      "image_filename": "ch99_03_unknown.png",
+      "prompt": "(테스트용)",
+      "model": "test",
+      "narration_text": "세 번째 장면. 매핑에 없는 voice_style은 기본값으로 떨어져야 합니다.",
+      "narration_seconds": 3.5,
+      "voice_style": "totally_unknown_style",
+      "scene_meta": {}
+    }
+  ],
+  "video_meta": {}
+}

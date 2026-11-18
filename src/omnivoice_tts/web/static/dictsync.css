@@ -1,0 +1,25 @@
+/* 발음 사전 — 다른 앱 사전과 오가기 */
+.link-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.link-card { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; background: #fff; }
+.link-card.pending { border-color: #e6cf8b; background: #fffdf3; }
+.link-card.missing { border-color: #fcc; background: #fff7f7; }
+.link-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.link-name { font-weight: 700; }
+.link-path { font-size: 11px; color: var(--muted); word-break: break-all; flex-basis: 100%; }
+.link-stats { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.link-stats span { padding: 1px 7px; border-radius: 10px; background: #f1f3f6; }
+.link-stats .warn { background: #fff1c2; }
+.link-stats .err { background: #fde2e2; }
+.link-actions { margin-left: auto; display: flex; gap: 6px; }
+.link-actions button { font-size: 12px; padding: 4px 10px; }
+.link-detail { margin-top: 8px; font-size: 12px; }
+.link-detail table { border-collapse: collapse; width: 100%; }
+.link-detail td, .link-detail th { border-bottom: 1px solid #eee; padding: 3px 6px; text-align: left; }
+.link-detail .choice label { margin-right: 10px; white-space: nowrap; }
+.link-msg { margin-top: 6px; font-size: 12px; }
+.link-msg.ok { color: var(--ok); }
+.link-msg.err { color: var(--error); }
+.link-add { margin-top: 8px; }
+.candidate-list { font-size: 12px; max-height: 220px; overflow: auto; padding-left: 18px; }
+.candidate-list li { cursor: pointer; }
+.candidate-list li:hover { color: var(--accent); text-decoration: underline; }

@@ -1,0 +1,7 @@
+# 대본 JSON 의 voice_style → 목소리 코드. 목록에 없으면 default.
+# (scene 의 voice_style 에 목소리 코드(W1 …)를 바로 적어도 된다)
+default: W1
+styles:
+  narrator: W1
+  내레이션: W1
+  해설: W1

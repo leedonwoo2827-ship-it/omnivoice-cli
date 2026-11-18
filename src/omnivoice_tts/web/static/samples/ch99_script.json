@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "chapter": 99,
+  "title": "OmniVoice TTS 일괄 합성 샘플",
+  "scenes": [
+    {
+      "scene": 1,
+      "narration_text": "첫 번째 장면입니다. 기본 목소리 W1 로 읽습니다.",
+      "narration_seconds": 3.0,
+      "voice_style": "W1"
+    },
+    {
+      "scene": 2,
+      "narration_text": "ADSL과 MOOC는 1989년부터 27킬로미터 떨어진 곳에서 쓰였습니다.",
+      "srt_text": "ADSL과 MOOC는 1989년부터 27킬로미터 떨어진 곳에서 쓰였습니다.",
+      "narration_seconds": 4.0,
+      "voice_style": "narrator"
+    },
+    {
+      "scene": 3,
+      "narration_text": "정말 잘했어요 [laughter] 자랑스럽습니다.",
+      "srt_text": "정말 잘했어요, 자랑스럽습니다.",
+      "narration_seconds": 2.5
+    },
+    {
+      "scene": 4,
+      "narration_text": "voice_map 에 없는 voice_style 은 기본 목소리로 읽고 경고가 뜹니다.",
+      "narration_seconds": 3.0,
+      "voice_style": "totally_unknown_style"
+    }
+  ]
+}
